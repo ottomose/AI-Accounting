@@ -5,11 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ai-accounting/shared": "*",
     "@better-auth/client": "^0.0.2-alpha.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
