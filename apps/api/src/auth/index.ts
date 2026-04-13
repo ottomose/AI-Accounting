@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { admin } from 'better-auth/plugins';
+import { admin, bearer } from 'better-auth/plugins';
 import { db } from '../db';
 import * as schema from '../db/schema';
 import * as authSchema from '../db/auth-schema';
@@ -21,6 +21,7 @@ export const auth = betterAuth({
     admin({
       defaultRole: 'client',
     }),
+    bearer(),
   ],
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
