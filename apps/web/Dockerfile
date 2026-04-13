@@ -1,23 +1,27 @@
 FROM node:22-alpine AS base
-
-# Install dependencies
-FROM base AS deps
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+
+# Copy root workspace files
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/web/package.json ./apps/web/
+
+# Install all workspace dependencies
+RUN npm install --workspace=apps/web --workspace=packages/shared
+
+# Copy source
+COPY packages/shared/ ./packages/shared/
+COPY apps/web/ ./apps/web/
 
 # Build
-FROM base AS build
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+WORKDIR /app/apps/web
 RUN npm run build
 
-# Serve with lightweight static server
-FROM base AS runner
-WORKDIR /app
+# Serve
+FROM node:22-alpine AS runner
 RUN npm install -g serve
-COPY --from=build /app/dist ./dist
+COPY --from=base /app/apps/web/dist /app/dist
+WORKDIR /app
 
 EXPOSE 5173
 CMD ["serve", "-s", "dist", "-l", "5173"]
