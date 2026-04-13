@@ -10,13 +10,13 @@ export const authClient = createAuthClient({
   baseURL: API_URL,
   plugins: [adminClient()],
   fetchOptions: {
-    onRequest(context) {
+    onRequest(context: any) {
       const token = localStorage.getItem('auth_token');
       if (token) {
         context.headers.set('Authorization', `Bearer ${token}`);
       }
     },
-    onResponse(context) {
+    onResponse(context: any) {
       // Store token from sign-in / sign-up responses
       if (context.response.ok) {
         context.response
