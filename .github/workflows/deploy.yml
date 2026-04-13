@@ -5,6 +5,7 @@ on:
     branches:
       - main      # -> staging
       - develop   # -> dev
+  workflow_dispatch:
 
 jobs:
   deploy-api:
