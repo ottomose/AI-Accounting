@@ -18,4 +18,4 @@ COPY --from=build /app/dist ./dist
 
 EXPOSE ${PORT:-3000}
 
-CMD sh -c "serve -s dist -l tcp://0.0.0.0:${PORT:-3000}"
+CMD sh -c "serve -s dist -p ${PORT:-3000}"
