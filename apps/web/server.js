@@ -34,6 +34,11 @@ createServer((req, res) => {
         '<head>',
         `<head><script>window.__API_URL__="${API_URL}"</script>`
       );
+      if (injected === html) {
+        console.warn('⚠️ HTML injection may have failed - <head> tag not found');
+      } else {
+        console.log(`✓ Injected API_URL=${API_URL} into HTML`);
+      }
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(injected);
     } else {
@@ -52,4 +57,5 @@ createServer((req, res) => {
   }
 }).listen(PORT, '0.0.0.0', () => {
   console.log(`Serving on port ${PORT}`);
+  console.log(`API_URL configured as: ${API_URL}`);
 });
