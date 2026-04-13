@@ -27,8 +27,32 @@ app.use(
   })
 );
 
-// Better Auth routes
-app.on(['POST', 'GET', 'OPTIONS'], '/api/auth/*', (c) => auth.handler(c.req.raw));
+// Better Auth routes — manually inject CORS headers since auth.handler returns a raw Response
+app.on(['POST', 'GET', 'OPTIONS'], '/api/auth/*', async (c) => {
+  const origin = c.req.header('origin') ?? '';
+  const allowed = corsOrigin.includes(origin);
+
+  // Handle preflight
+  if (c.req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': allowed ? origin : corsOrigin[0],
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Credentials': 'true',
+      },
+    });
+  }
+
+  const response = await auth.handler(c.req.raw);
+  const newResponse = new Response(response.body, response);
+  if (allowed) {
+    newResponse.headers.set('Access-Control-Allow-Origin', origin);
+    newResponse.headers.set('Access-Control-Allow-Credentials', 'true');
+  }
+  return newResponse;
+});
 
 // Public routes
 app.get('/', (c) => {
