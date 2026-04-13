@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { authMiddleware } from '../auth/middleware';
+import { authMiddleware, type AuthSession } from '../auth/middleware';
 import { chat } from '../ai/service';
 
-const chatRoute = new Hono();
+const chatRoute = new Hono<{ Variables: { authSession: AuthSession } }>();
 
 chatRoute.use('*', authMiddleware);
 

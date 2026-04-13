@@ -173,7 +173,7 @@ async function executeCreateJournalEntry(
       entryNumber,
       date: new Date(args.date as string),
       description: args.description as string,
-      currency: (args.currency as string) ?? 'GEL',
+      currency: ((args.currency as string) ?? 'GEL') as 'GEL' | 'USD' | 'EUR' | 'GBP' | 'TRY' | 'RUB',
       companyId: context.companyId,
       createdById: context.userId,
     })

@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { Client } from 'pg';
-import { authMiddleware } from '../auth/middleware';
+import { authMiddleware, type AuthSession } from '../auth/middleware';
 
-const journalEntriesRoute = new Hono();
+const journalEntriesRoute = new Hono<{ Variables: { authSession: AuthSession } }>();
 
 interface JournalLine {
   accountId: string;

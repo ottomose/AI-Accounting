@@ -1,7 +1,7 @@
 import { createMiddleware } from 'hono/factory';
 import { auth } from './index';
 
-type AuthSession = {
+export type AuthSession = {
   user: typeof auth.$Infer.Session.user;
   session: typeof auth.$Infer.Session.session;
 };

@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
-import { authMiddleware } from '../auth/middleware';
+import { authMiddleware, type AuthSession } from '../auth/middleware';
 import { db } from '../db';
 import { companies } from '../db/schema';
 import { eq } from 'drizzle-orm';
 
-const companiesRoute = new Hono();
+const companiesRoute = new Hono<{ Variables: { authSession: AuthSession } }>();
 
 companiesRoute.use('*', authMiddleware);
 

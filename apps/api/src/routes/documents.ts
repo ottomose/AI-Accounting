@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { authMiddleware } from '../auth/middleware';
+import { authMiddleware, type AuthSession } from '../auth/middleware';
 import { getSignedUploadUrl, getSignedDownloadUrl, deleteFile } from '../storage/r2';
 import { db } from '../db';
 import { documents } from '../db/schema';
@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { processDocumentOCR } from '../ai/service';
 
-const documentsRoute = new Hono();
+const documentsRoute = new Hono<{ Variables: { authSession: AuthSession } }>();
 
 // Get presigned upload URL
 documentsRoute.post('/upload-url', authMiddleware, async (c) => {
