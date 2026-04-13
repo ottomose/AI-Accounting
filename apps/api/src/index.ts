@@ -8,6 +8,8 @@ import { authMiddleware, requireRole } from './auth/middleware';
 import documentsRoute from './routes/documents';
 import journalEntriesRoute from './routes/journal-entries';
 import accountingRoute from './routes/accounting';
+import chatRoute from './routes/chat';
+import companiesRoute from './routes/companies';
 
 const app = new Hono();
 
@@ -46,6 +48,12 @@ app.route('/api/journal-entries', journalEntriesRoute);
 
 // Accounting API (accounts, ledger, trial-balance)
 app.route('/api', accountingRoute);
+
+// AI Chat API
+app.route('/api/chat', chatRoute);
+
+// Companies API
+app.route('/api/companies', companiesRoute);
 
 // Admin-only route example
 app.get('/api/admin/users', authMiddleware, requireRole('admin'), (c) => {

@@ -5,6 +5,7 @@ import { db } from '../db';
 import { documents } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
+import { processDocumentOCR } from '../ai/service';
 
 const documentsRoute = new Hono();
 
@@ -58,6 +59,50 @@ documentsRoute.delete('/:id', authMiddleware, async (c) => {
   await db.delete(documents).where(eq(documents.id, id));
 
   return c.json({ success: true });
+});
+
+// List documents for a company
+documentsRoute.get('/', authMiddleware, async (c) => {
+  const companyId = c.req.query('companyId');
+  if (!companyId) return c.json({ error: 'companyId required' }, 400);
+
+  const docs = await db
+    .select()
+    .from(documents)
+    .where(eq(documents.companyId, companyId));
+
+  return c.json({ documents: docs });
+});
+
+// Process document with OCR
+documentsRoute.post('/:id/process', authMiddleware, async (c) => {
+  const id = c.req.param('id');
+  const { documentType } = await c.req.json();
+
+  const [doc] = await db
+    .select()
+    .from(documents)
+    .where(eq(documents.id, id));
+
+  if (!doc) return c.json({ error: 'Not found' }, 404);
+
+  // Download file from R2 as base64
+  const downloadUrl = await getSignedDownloadUrl(doc.fileUrl);
+  const response = await fetch(downloadUrl);
+  const buffer = await response.arrayBuffer();
+  const base64 = Buffer.from(buffer).toString('base64');
+
+  const result = await processDocumentOCR(
+    base64,
+    doc.mimeType,
+    documentType || 'receipt'
+  );
+
+  return c.json({
+    documentId: id,
+    documentType: documentType || 'receipt',
+    ...result,
+  });
 });
 
 export default documentsRoute;

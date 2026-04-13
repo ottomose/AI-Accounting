@@ -12,6 +12,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "@aws-sdk/client-s3": "^3.1029.0",
     "@aws-sdk/s3-request-presigner": "^3.1029.0",
     "@hono/node-server": "^1.19.14",
