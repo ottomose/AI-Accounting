@@ -28,7 +28,7 @@ app.use(
 );
 
 // Better Auth routes
-app.on(['POST', 'GET'], '/api/auth/**', (c) => auth.handler(c.req.raw));
+app.on(['POST', 'GET', 'OPTIONS'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 
 // Public routes
 app.get('/', (c) => {
