@@ -1,0 +1,13 @@
+{
+  "name": "@ai-accounting/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'TODO: setup web framework'",
+    "build": "echo 'TODO: setup build'",
+    "lint": "echo 'TODO: setup linter'"
+  },
+  "dependencies": {
+    "@ai-accounting/shared": "*"
+  }
+}

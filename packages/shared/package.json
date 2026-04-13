@@ -1,0 +1,9 @@
+{
+  "name": "@ai-accounting/shared",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "echo 'TODO: setup build'",
+    "lint": "echo 'TODO: setup linter'"
+  }
+}
