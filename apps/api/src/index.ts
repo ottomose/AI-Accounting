@@ -6,6 +6,8 @@ import { logger } from 'hono/logger';
 import { auth } from './auth';
 import { authMiddleware, requireRole } from './auth/middleware';
 import documentsRoute from './routes/documents';
+import journalEntriesRoute from './routes/journal-entries';
+import accountingRoute from './routes/accounting';
 
 const app = new Hono();
 
@@ -38,6 +40,12 @@ app.get('/api/me', authMiddleware, (c) => {
 
 // Documents API
 app.route('/api/documents', documentsRoute);
+
+// Journal Entries API
+app.route('/api/journal-entries', journalEntriesRoute);
+
+// Accounting API (accounts, ledger, trial-balance)
+app.route('/api', accountingRoute);
 
 // Admin-only route example
 app.get('/api/admin/users', authMiddleware, requireRole('admin'), (c) => {
