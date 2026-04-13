@@ -2,12 +2,31 @@
   "name": "@ai-accounting/api",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "echo 'TODO: setup api framework'",
-    "build": "echo 'TODO: setup build'",
-    "lint": "echo 'TODO: setup linter'"
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@ai-accounting/shared": "*"
+    "@ai-accounting/shared": "*",
+    "@aws-sdk/client-s3": "^3.1029.0",
+    "@aws-sdk/s3-request-presigner": "^3.1029.0",
+    "@hono/node-server": "^1.19.14",
+    "@neondatabase/serverless": "^1.0.2",
+    "better-auth": "^1.6.2",
+    "drizzle-orm": "^0.45.2",
+    "esbuild": "^0.27.7",
+    "hono": "^4.12.12"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
   }
 }

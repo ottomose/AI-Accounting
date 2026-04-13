@@ -2,12 +2,25 @@
   "name": "@ai-accounting/web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "echo 'TODO: setup web framework'",
-    "build": "echo 'TODO: setup build'",
-    "lint": "echo 'TODO: setup linter'"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@ai-accounting/shared": "*"
+    "@ai-accounting/shared": "*",
+    "@better-auth/client": "^0.0.2-alpha.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.8"
   }
 }
