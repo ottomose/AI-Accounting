@@ -7,12 +7,19 @@ export type { ParsedStatement, ParsedTransaction, BankId } from './types';
 export function detectBank(buffer: Buffer): BankId {
   try {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
-    if (isTbcStatement(rows)) return 'TBC';
-    // TODO: BOG, Liberty, Credo detection
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
+      // Debug: log first 3 rows of each sheet
+      console.log(`[detectBank] sheet="${sheetName}" rows=${rows.length}`);
+      for (let i = 0; i < Math.min(3, rows.length); i++) {
+        console.log(`[detectBank]   row[${i}]:`, (rows[i] ?? []).slice(0, 6).map((c) => String(c ?? '').slice(0, 30)).join(' | '));
+      }
+      if (isTbcStatement(rows)) return 'TBC';
+    }
     return 'UNKNOWN';
-  } catch {
+  } catch (err) {
+    console.error('[detectBank] error:', err);
     return 'UNKNOWN';
   }
 }

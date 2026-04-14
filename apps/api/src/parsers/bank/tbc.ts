@@ -31,13 +31,14 @@ const TBC_COLUMNS = [
 const TBC_GEORGIAN_HEADER_SIGNAL = ['თარიღი', 'დანიშნულება', 'გასული თანხა', 'შემოსული თანხა'];
 
 export function isTbcStatement(rows: unknown[][]): boolean {
-  // Check any of the first 10 rows for the Georgian header signal
-  const scanLimit = Math.min(10, rows.length);
+  const scanLimit = Math.min(30, rows.length);
   for (let i = 0; i < scanLimit; i++) {
     const row = rows[i];
     if (!row) continue;
     const joined = row.map((c) => String(c ?? '')).join('|');
-    if (TBC_GEORGIAN_HEADER_SIGNAL.every((k) => joined.includes(k))) return true;
+    // Need at least 3 of 4 Georgian keywords on same row
+    const matches = TBC_GEORGIAN_HEADER_SIGNAL.filter((k) => joined.includes(k)).length;
+    if (matches >= 3) return true;
   }
   return false;
 }
@@ -67,17 +68,23 @@ function parseAmount(val: unknown): number | undefined {
 
 export function parseTbcXlsx(buffer: Buffer): ParsedStatement {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: '' });
 
-  // Locate header row: row that matches Georgian signal; English row is next
+  // Find the sheet containing the TBC header
+  let rows: unknown[][] = [];
   let headerIdx = -1;
-  for (let i = 0; i < Math.min(15, rows.length); i++) {
-    const joined = (rows[i] ?? []).map((c) => String(c ?? '')).join('|');
-    if (TBC_GEORGIAN_HEADER_SIGNAL.every((k) => joined.includes(k))) {
-      headerIdx = i;
-      break;
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const candidate = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: '' });
+    for (let i = 0; i < Math.min(30, candidate.length); i++) {
+      const joined = (candidate[i] ?? []).map((c) => String(c ?? '')).join('|');
+      const matches = TBC_GEORGIAN_HEADER_SIGNAL.filter((k) => joined.includes(k)).length;
+      if (matches >= 3) {
+        headerIdx = i;
+        rows = candidate;
+        break;
+      }
     }
+    if (headerIdx !== -1) break;
   }
   if (headerIdx === -1) {
     throw new Error('TBC: header row not found');

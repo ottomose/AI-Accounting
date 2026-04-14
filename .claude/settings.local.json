@@ -34,7 +34,8 @@
       "Bash(gh workflow:*)",
       "WebFetch(domain:ai-accountingapi-production.up.railway.app)",
       "WebFetch(domain:ai-accountingweb-production.up.railway.app)",
-      "Bash(git commit -m 'Make AI categorization non-blocking in parse-statement:*)"
+      "Bash(git commit -m 'Make AI categorization non-blocking in parse-statement:*)",
+      "Bash(git commit -m 'Make TBC detection lenient: scan all sheets, 3/4 keywords, debug logs:*)"
     ]
   }
 }
