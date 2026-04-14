@@ -8,8 +8,8 @@ export interface Suggestion {
   needsReview: boolean;
 }
 
-// Bank cash account (GEL). TODO: resolve by currency/bank
-const CASH_GEL = '1232';
+// Bank cash account (GEL) — BASS 1210: ეროვნული ვალუტა რეზიდენტ ბანკებში
+const CASH_GEL = '1210';
 
 // Rule-based categorization for known TBC patterns.
 // Returns null if no confident match — caller should fall back to AI.
@@ -32,10 +32,10 @@ export function ruleCategorize(tx: ParsedTransaction): Suggestion | null {
 
   if (isFee && tx.direction === 'out') {
     return {
-      debitAccountCode: '533', // Bank Fees
+      debitAccountCode: '7490', // სხვა საერთო ხარჯები (საბანკო საკომისიო)
       creditAccountCode: CASH_GEL,
       confidence: 'high',
-      reason: 'საბანკო საკომისიო (აღმოჩენილია აღწერილობიდან/op code-დან)',
+      reason: 'საბანკო საკომისიო',
       needsReview: false,
     };
   }
@@ -43,11 +43,11 @@ export function ruleCategorize(tx: ParsedTransaction): Suggestion | null {
   // === Tax payments (GIT + treasury account) ===
   if (opCode === 'GIT' || desc.includes('გადასახადების ერთიანი კოდი')) {
     return {
-      debitAccountCode: '223', // Income Tax Payable (default — user can refine)
+      debitAccountCode: '3390', // სხვა საგადასახადო ვალდებულებები (default — user picks 3310/3320/3330)
       creditAccountCode: CASH_GEL,
       confidence: 'medium',
-      reason: 'გადასახადების ერთიანი კოდი — ბიუჯეტში გადარიცხვა',
-      needsReview: true, // user should pick the exact tax type (223/224/etc.)
+      reason: 'გადასახადების ერთიანი კოდი — ბიუჯეტში გადარიცხვა (დააზუსტე რომელი გადასახადი)',
+      needsReview: true,
     };
   }
 
@@ -55,21 +55,20 @@ export function ruleCategorize(tx: ParsedTransaction): Suggestion | null {
   if (opCode === 'GIB' && tx.direction === 'in') {
     return {
       debitAccountCode: CASH_GEL,
-      creditAccountCode: '1221', // Accounts Receivable
+      creditAccountCode: '1410', // მოთხოვნები მიწოდებიდან და მომსახურებიდან
       confidence: 'high',
       reason: `კლიენტისგან შემოსული თანხა${tx.partnerName ? ` (${tx.partnerName})` : ''}`,
       needsReview: false,
     };
   }
 
-  // === Outgoing transfer to supplier (GMN/GMB) ===
+  // === Outgoing transfer (GMN/GMB) ===
   if ((opCode === 'GMN' || opCode === 'GMB') && tx.direction === 'out') {
-    // Check if partner is an individual (likely employee advance or owner draw)
     const looksLikeIndividual =
-      tx.partnerTaxCode && /^\d{11}$/.test(tx.partnerTaxCode); // 11-digit personal ID
+      tx.partnerTaxCode && /^\d{11}$/.test(tx.partnerTaxCode);
     if (looksLikeIndividual) {
       return {
-        debitAccountCode: '1221', // Treat as advance to individual (needs review)
+        debitAccountCode: '1430', // მოთხოვნები საწარმოს პერსონალის მიმართ (ავანსი)
         creditAccountCode: CASH_GEL,
         confidence: 'low',
         reason: `ფიზ. პირზე გადარიცხვა (${tx.partnerName}) — შეიძლება იყოს ავანსი, ხელფასი ან მესაკუთრის გატანა`,
@@ -77,7 +76,7 @@ export function ruleCategorize(tx: ParsedTransaction): Suggestion | null {
       };
     }
     return {
-      debitAccountCode: '221', // Accounts Payable (supplier)
+      debitAccountCode: '3110', // მოწოდებიდან წარმოქმნილი ვალდებულებები
       creditAccountCode: CASH_GEL,
       confidence: 'medium',
       reason: `მომწოდებელზე გადარიცხვა${tx.partnerName ? ` (${tx.partnerName})` : ''}`,
@@ -88,7 +87,7 @@ export function ruleCategorize(tx: ParsedTransaction): Suggestion | null {
   // === Parking / fines (*MBS*) ===
   if (opCode === '*MBS*' || desc.includes('fine') || desc.includes('parking') || desc.includes('ჯარიმ')) {
     return {
-      debitAccountCode: '529', // Other Operating Expenses
+      debitAccountCode: '7490', // სხვა საერთო ხარჯები
       creditAccountCode: CASH_GEL,
       confidence: 'medium',
       reason: 'ჯარიმა / პარკინგი',
@@ -99,10 +98,10 @@ export function ruleCategorize(tx: ParsedTransaction): Suggestion | null {
   // === Utilities ===
   if (bankType.includes('კომუნალური') || desc.includes('კომუნალ') || desc.includes('ელექტრო') || desc.includes('წყალი') || desc.includes('გაზი')) {
     return {
-      debitAccountCode: '523',
+      debitAccountCode: '7430', // კომუნიკაციის ხარჯები (ან 7490)
       creditAccountCode: CASH_GEL,
       confidence: 'medium',
-      reason: 'კომუნალური ხარჯი',
+      reason: 'კომუნალური/კომუნიკაცია',
       needsReview: true,
     };
   }
@@ -110,7 +109,7 @@ export function ruleCategorize(tx: ParsedTransaction): Suggestion | null {
   // === Salary ===
   if (desc.includes('ხელფას') || desc.includes('salary') || addInfo.includes('ხელფას')) {
     return {
-      debitAccountCode: '521',
+      debitAccountCode: '3130', // გადასახდელი ხელფასი
       creditAccountCode: CASH_GEL,
       confidence: 'medium',
       reason: 'ხელფასის გადახდა',

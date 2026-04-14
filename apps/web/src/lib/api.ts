@@ -23,8 +23,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 // Companies
 export const getCompanies = () => request<{ companies: Company[] }>('/api/companies');
-export const seedCompanyAccounts = (companyId: string) =>
-  request<{ success: boolean; seeded: number }>(`/api/companies/${companyId}/seed-accounts`, { method: 'POST' });
+export const seedCompanyAccounts = (companyId: string, force = false) =>
+  request<{ success: boolean; seeded: number; forced: boolean }>(
+    `/api/companies/${companyId}/seed-accounts${force ? '?force=true' : ''}`,
+    { method: 'POST' }
+  );
 
 export const createCompany = (name: string, taxId: string) =>
   request<{ company: Company }>('/api/companies', {

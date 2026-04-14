@@ -49,14 +49,16 @@ companiesRoute.post('/', async (c) => {
   return c.json({ company });
 });
 
-// Manual seed for existing companies
+// Manual seed for existing companies. ?force=true wipes existing accounts + journal entries.
 companiesRoute.post('/:id/seed-accounts', async (c) => {
   const id = c.req.param('id');
+  const force = c.req.query('force') === 'true';
   try {
-    const count = await seedAccountsForCompany(id);
-    return c.json({ success: true, seeded: count });
+    const count = await seedAccountsForCompany(id, force);
+    return c.json({ success: true, seeded: count, forced: force });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.error('[seed-accounts]', err);
     return c.json({ error: msg }, 500);
   }
 });

@@ -151,26 +151,35 @@ export function StatementReview({ documentId, companyId, onClose }: Props) {
 
       {error && <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
 
+      <div className="mb-4 p-3 bg-gray-50 border rounded-lg flex items-center justify-between">
+        <span className="text-xs text-gray-600">
+          ანგარიშთა გეგმა: {accounts.length} ანგარიში
+        </span>
+        <button
+          onClick={async () => {
+            const hasAccounts = accounts.length > 0;
+            const msg = hasAccounts
+              ? 'ანგარიშთა გეგმა და ყველა გატარება წაიშლება და ჩაიწერება BASS-ის ახალი გეგმა. გავაგრძელო?'
+              : 'BASS-ის ანგარიშთა გეგმა შეიქმნას?';
+            if (!confirm(msg)) return;
+            try {
+              await seedCompanyAccounts(companyId, hasAccounts);
+              const res = await getAccounts(companyId);
+              setAccounts(res.accounts);
+              setError('');
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Seed failed');
+            }
+          }}
+          className="text-xs px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+        >
+          {accounts.length === 0 ? 'BASS გეგმის შექმნა' : 'BASS გეგმის განახლება (reset)'}
+        </button>
+      </div>
+
       {accounts.length === 0 && (
-        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-sm text-yellow-800 mb-2">
-            ⚠️ ამ კომპანიას ანგარიშთა გეგმა (Chart of Accounts) არ აქვს. გატარება ვერ მოხდება.
-          </p>
-          <button
-            onClick={async () => {
-              try {
-                await seedCompanyAccounts(companyId);
-                const res = await getAccounts(companyId);
-                setAccounts(res.accounts);
-                setError('');
-              } catch (err) {
-                setError(err instanceof Error ? err.message : 'Seed failed');
-              }
-            }}
-            className="px-3 py-1.5 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
-          >
-            ანგარიშთა გეგმის შექმნა (BASS)
-          </button>
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+          ⚠️ ანგარიშთა გეგმა არ არის. დააჭირე ზემოთ ღილაკს BASS-ის შესაქმნელად.
         </div>
       )}
 
