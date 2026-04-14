@@ -92,6 +92,19 @@ const aiTools: Tool[] = [
     },
   },
   {
+    name: 'get_account_breakdown',
+    description: 'Get a detailed breakdown of an account balance grouped by line description / counterparty. Useful when the user asks "who owes how much" on receivables/payables (e.g. 1410, 1430, 3110, 3130). Returns one row per unique description with debit/credit totals and net balance.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        accountCode: { type: 'string', description: 'Account code (e.g. 1430)' },
+        companyId: { type: 'string' },
+        asOfDate: { type: 'string', description: 'ISO date, defaults to today' },
+      },
+      required: ['accountCode', 'companyId'],
+    },
+  },
+  {
     name: 'categorize_transaction',
     description: 'Suggest debit/credit accounts for a transaction based on description and amount',
     input_schema: {
@@ -125,6 +138,8 @@ export async function executeTool(
       return executeGetTrialBalance(args, context);
     case 'list_journal_entries':
       return executeListJournalEntries(args, context);
+    case 'get_account_breakdown':
+      return executeGetAccountBreakdown(args, context);
     case 'categorize_transaction':
       return { suggestion: true, ...args, note: 'Categorization is advisory — use create_journal_entry to post.' };
     default:
@@ -350,6 +365,63 @@ async function executeListJournalEntries(
     .limit(limit);
 
   return { entries, count: entries.length };
+}
+
+async function executeGetAccountBreakdown(
+  args: Record<string, unknown>,
+  context: { companyId: string }
+) {
+  const companyId = (args.companyId as string) || context.companyId;
+  const code = args.accountCode as string;
+
+  const [account] = await db
+    .select()
+    .from(accounts)
+    .where(and(eq(accounts.companyId, companyId), eq(accounts.code, code)));
+
+  if (!account) return { error: `Account ${code} not found` };
+
+  const asOfDate = args.asOfDate ? new Date(args.asOfDate as string) : null;
+
+  // Group by line description (fallback to entry description) with debit/credit sums
+  const rows = await db
+    .select({
+      label: sql<string>`COALESCE(NULLIF(${journalLines.description}, ''), ${journalEntries.description})`,
+      totalDebit: sql<string>`COALESCE(SUM(${journalLines.debit}), 0)`,
+      totalCredit: sql<string>`COALESCE(SUM(${journalLines.credit}), 0)`,
+      txCount: sql<number>`COUNT(*)::int`,
+    })
+    .from(journalLines)
+    .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+    .where(
+      and(
+        eq(journalLines.accountId, account.id),
+        eq(journalEntries.status, 'posted'),
+        asOfDate ? lte(journalEntries.date, asOfDate) : undefined
+      )
+    )
+    .groupBy(sql`COALESCE(NULLIF(${journalLines.description}, ''), ${journalEntries.description})`);
+
+  const breakdown = rows
+    .map((r) => ({
+      label: r.label || '(უცნობი)',
+      debit: parseFloat(r.totalDebit),
+      credit: parseFloat(r.totalCredit),
+      balance: parseFloat(r.totalDebit) - parseFloat(r.totalCredit),
+      txCount: r.txCount,
+    }))
+    .filter((r) => Math.abs(r.balance) > 0.001 || r.debit > 0 || r.credit > 0)
+    .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+
+  const totalBalance = breakdown.reduce((s, r) => s + r.balance, 0);
+
+  return {
+    accountCode: code,
+    accountName: account.nameKa,
+    totalBalance,
+    groupCount: breakdown.length,
+    breakdown,
+  };
 }
 
 // ==================== Chat Function ====================
