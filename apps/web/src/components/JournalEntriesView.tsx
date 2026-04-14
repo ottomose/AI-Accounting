@@ -187,6 +187,26 @@ export function JournalEntriesView({ companyId }: Props) {
                       </td>
                       <td className="p-2 max-w-md">
                         <div className="truncate" title={e.description}>{e.description}</div>
+                        {e.lines && e.lines.length > 0 && (
+                          <div className="text-[10px] text-gray-500 mt-0.5 space-y-0.5">
+                            {(() => {
+                              const debits = e.lines.filter((l) => Number(l.debit) > 0);
+                              const credits = e.lines.filter((l) => Number(l.credit) > 0);
+                              const fmt = (l: JournalLine) =>
+                                `${l.accountCode} ${l.accountNameKa || l.accountName || ''}`;
+                              return (
+                                <>
+                                  <div className="truncate" title={debits.map(fmt).join(', ')}>
+                                    <span className="text-green-700">Dr:</span> {debits.map(fmt).join(', ') || '—'}
+                                  </div>
+                                  <div className="truncate" title={credits.map(fmt).join(', ')}>
+                                    <span className="text-red-700">Cr:</span> {credits.map(fmt).join(', ') || '—'}
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </td>
                       <td className="p-2 text-right font-mono whitespace-nowrap">
                         {Number(e.totalDebit || 0).toFixed(2)} {e.currency}
