@@ -17,6 +17,7 @@ interface CreateJournalEntry {
   currency?: string;
   exchangeRate?: number;
   companyId: string;
+  sourceRef?: string;
   lines: JournalLine[];
 }
 
@@ -62,6 +63,27 @@ journalEntriesRoute.post('/', authMiddleware, async (c) => {
     await client.connect();
     await client.query('BEGIN');
 
+    // Idempotency: skip if this source transaction was already imported
+    if (body.sourceRef) {
+      const dupCheck = await client.query(
+        `SELECT id, entry_number, status FROM journal_entries
+         WHERE company_id = $1 AND source_ref = $2
+         LIMIT 1`,
+        [body.companyId, body.sourceRef]
+      );
+      if (dupCheck.rowCount && dupCheck.rowCount > 0) {
+        await client.query('ROLLBACK');
+        return c.json(
+          {
+            duplicate: true,
+            entry: dupCheck.rows[0],
+            message: `ეს ტრანზაქცია უკვე გატარებულია (${dupCheck.rows[0].entry_number})`,
+          },
+          200
+        );
+      }
+    }
+
     // Generate entry number
     const countResult = await client.query(
       `SELECT COUNT(*) as count FROM journal_entries WHERE company_id = $1`,
@@ -71,8 +93,8 @@ journalEntriesRoute.post('/', authMiddleware, async (c) => {
 
     // Insert journal entry
     const entryResult = await client.query(
-      `INSERT INTO journal_entries (entry_number, date, description, currency, exchange_rate, company_id, created_by_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO journal_entries (entry_number, date, description, currency, exchange_rate, company_id, created_by_id, source_ref)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         entryNumber,
@@ -82,6 +104,7 @@ journalEntriesRoute.post('/', authMiddleware, async (c) => {
         body.exchangeRate || 1.0,
         body.companyId,
         user.id,
+        body.sourceRef || null,
       ]
     );
     const entry = entryResult.rows[0];

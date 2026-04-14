@@ -110,12 +110,14 @@ export const journalEntries = pgTable(
       .references(() => user.id),
     postedById: text('posted_by_id').references(() => user.id),
     postedAt: timestamp('posted_at'),
+    sourceRef: text('source_ref'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => [
     index('je_company_date_idx').on(table.companyId, table.date),
     index('je_company_number_idx').on(table.companyId, table.entryNumber),
+    index('je_company_source_ref_idx').on(table.companyId, table.sourceRef),
   ]
 );
 

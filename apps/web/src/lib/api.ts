@@ -177,6 +177,7 @@ export interface CreateJournalEntryData {
   description: string;
   currency: string;
   companyId: string;
+  sourceRef?: string;
   lines: { accountId: string; debit: number; credit: number; description?: string }[];
 }
 
@@ -212,6 +213,7 @@ export interface ParsedTransaction {
   partnerTaxCode?: string;
   opCode?: string;
   transactionId?: string;
+  alreadyPosted?: boolean;
   suggestion: {
     debitAccountCode: string;
     creditAccountCode: string;

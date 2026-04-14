@@ -210,6 +210,27 @@ documentsRoute.post('/:id/parse-statement', authMiddleware, async (c) => {
       }
     }
 
+    // Check which transactions are already posted (idempotency)
+    const txIds = statement.transactions.map((t) => t.transactionId).filter(Boolean) as string[];
+    let postedRefs = new Set<string>();
+    if (txIds.length > 0) {
+      const { Client } = await import('pg');
+      const pgClient = new Client({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+      });
+      try {
+        await pgClient.connect();
+        const res = await pgClient.query(
+          `SELECT source_ref FROM journal_entries WHERE company_id = $1 AND source_ref = ANY($2::text[])`,
+          [doc.companyId, txIds]
+        );
+        postedRefs = new Set(res.rows.map((r) => r.source_ref));
+      } finally {
+        await pgClient.end();
+      }
+    }
+
     return c.json({
       documentId: id,
       statement: {
@@ -217,6 +238,7 @@ documentsRoute.post('/:id/parse-statement', authMiddleware, async (c) => {
         transactions: statement.transactions.map((tx, i) => ({
           ...tx,
           suggestion: suggestions[i] ?? null,
+          alreadyPosted: tx.transactionId ? postedRefs.has(tx.transactionId) : false,
         })),
       },
     });

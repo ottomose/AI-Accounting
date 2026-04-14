@@ -38,7 +38,8 @@
       "Bash(git commit -m 'Make TBC detection lenient: scan all sheets, 3/4 keywords, debug logs:*)",
       "Bash(git commit -m 'Fix statement review: select all rows with suggestions, surface post errors:*)",
       "Bash(rm -f /Users/otar/Downloads/AI-Accounting/.git/index.lock)",
-      "Bash(git commit -m 'Fix trial balance response shape to match frontend TrialBalanceResponse:*)"
+      "Bash(git commit -m 'Fix trial balance response shape to match frontend TrialBalanceResponse:*)",
+      "Bash(pnpm typecheck:*)"
     ]
   }
 }

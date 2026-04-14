@@ -91,9 +91,31 @@ app.get('/api/admin/users', authMiddleware, requireRole('admin'), (c) => {
   return c.json({ message: 'Admin access granted' });
 });
 
+// Idempotent schema bootstrap — ensures columns exist even if migrations haven't run
+async function bootstrapSchema() {
+  const { Client } = await import('pg');
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  try {
+    await client.connect();
+    await client.query(`ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS source_ref TEXT`);
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS je_company_source_ref_idx ON journal_entries (company_id, source_ref)`
+    );
+    console.log('[bootstrap] schema ok');
+  } catch (e) {
+    console.error('[bootstrap] schema error:', e);
+  } finally {
+    await client.end();
+  }
+}
+
 const port = Number(process.env.PORT) || 3000;
 console.log(`Server running on http://localhost:${port}`);
 
+bootstrapSchema();
 serve({ fetch: app.fetch, port, overrideGlobalObjects: false });
 
 export default app;

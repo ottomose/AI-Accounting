@@ -37,10 +37,11 @@ export function StatementReview({ documentId, companyId, onClose }: Props) {
       setRows(
         st.transactions.map((tx) => ({
           ...tx,
-          // Select any row that has both debit and credit suggested
-          _selected: !!(tx.suggestion?.debitAccountCode && tx.suggestion?.creditAccountCode),
+          // Select unposted rows with both debit/credit suggested; skip already-posted
+          _selected: !tx.alreadyPosted && !!(tx.suggestion?.debitAccountCode && tx.suggestion?.creditAccountCode),
           _debit: tx.suggestion?.debitAccountCode ?? '',
           _credit: tx.suggestion?.creditAccountCode ?? '',
+          _posted: tx.alreadyPosted,
         }))
       );
     } catch (err) {
@@ -80,17 +81,19 @@ export function StatementReview({ documentId, companyId, onClose }: Props) {
       }
 
       try {
-        await createJournalEntry({
+        const res = await createJournalEntry({
           date: row.date,
           description: `${row.description}${row.partnerName ? ` — ${row.partnerName}` : ''}`,
           currency: (row.currency || 'GEL') as 'GEL',
           companyId,
+          sourceRef: row.transactionId,
           lines: [
             { accountId: debitAcc.id, debit: row.amount, credit: 0, description: row.description },
             { accountId: creditAcc.id, debit: 0, credit: row.amount, description: row.description },
           ],
         });
-        updateRow(i, { _posted: true, _error: undefined });
+        const isDup = (res as unknown as { duplicate?: boolean }).duplicate;
+        updateRow(i, { _posted: true, _error: isDup ? 'უკვე გატარებული' : undefined });
         posted++;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Post failed';
@@ -277,7 +280,7 @@ export function StatementReview({ documentId, companyId, onClose }: Props) {
                     {row.suggestion?.reason || '—'}
                   </td>
                   <td className="p-2">
-                    {row._posted ? <span className="text-green-600">✓</span>
+                    {row._posted ? <span className="text-green-600" title="უკვე გატარებული">✓</span>
                       : row._error ? <span className="text-red-600" title={row._error}>⚠</span>
                       : row.suggestion?.needsReview ? <span className="text-yellow-600">შემოწმე</span>
                       : <span className="text-gray-400">—</span>}
