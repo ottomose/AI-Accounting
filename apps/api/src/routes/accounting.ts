@@ -148,13 +148,21 @@ accountingRoute.get('/trial-balance', authMiddleware, async (c) => {
     const totalDebit = result.rows.reduce((s, r) => s + Number(r.total_debit), 0);
     const totalCredit = result.rows.reduce((s, r) => s + Number(r.total_credit), 0);
 
+    const accountsOut = result.rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      nameKa: r.name_ka,
+      type: r.type,
+      debit: Number(r.total_debit),
+      credit: Number(r.total_credit),
+      balance: Number(r.balance),
+    }));
+
     return c.json({
-      accounts: result.rows,
-      totals: {
-        debit: totalDebit.toFixed(2),
-        credit: totalCredit.toFixed(2),
-        balanced: Math.abs(totalDebit - totalCredit) < 0.01,
-      },
+      accounts: accountsOut,
+      totalDebit,
+      totalCredit,
+      isBalanced: Math.abs(totalDebit - totalCredit) < 0.01,
     });
   } finally {
     await client.end();
