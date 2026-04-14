@@ -23,6 +23,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 // Companies
 export const getCompanies = () => request<{ companies: Company[] }>('/api/companies');
+export const seedCompanyAccounts = (companyId: string) =>
+  request<{ success: boolean; seeded: number }>(`/api/companies/${companyId}/seed-accounts`, { method: 'POST' });
+
 export const createCompany = (name: string, taxId: string) =>
   request<{ company: Company }>('/api/companies', {
     method: 'POST',

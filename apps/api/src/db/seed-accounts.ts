@@ -102,39 +102,51 @@ const chartOfAccounts = [
   { code: '542', name: 'Property Tax', nameKa: 'ქონების გადასახადი', type: 'expense', level: 3, isGroup: false, parentCode: '54' },
 ];
 
-async function seed(companyId: string) {
+export async function seedAccountsForCompany(companyId: string): Promise<number> {
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
   });
   await client.connect();
 
-  // Build parent ID map
-  const idMap = new Map<string, string>();
-
-  for (const acc of chartOfAccounts) {
-    const parentId = acc.parentCode ? idMap.get(acc.parentCode) : null;
-
-    const result = await client.query(
-      `INSERT INTO accounts (code, name, name_ka, type, parent_id, level, is_group, company_id)
-       VALUES ($1, $2, $3, $4::account_type, $5, $6, $7, $8)
-       RETURNING id`,
-      [acc.code, acc.name, acc.nameKa, acc.type, parentId, acc.level, acc.isGroup, companyId]
+  try {
+    // Skip if already seeded
+    const existing = await client.query(
+      'SELECT COUNT(*)::int AS c FROM accounts WHERE company_id = $1',
+      [companyId]
     );
-    idMap.set(acc.code, result.rows[0].id);
+    if (existing.rows[0].c > 0) {
+      console.log(`[seed] company ${companyId} already has ${existing.rows[0].c} accounts, skipping`);
+      return 0;
+    }
+
+    const idMap = new Map<string, string>();
+    for (const acc of chartOfAccounts) {
+      const parentId = acc.parentCode ? idMap.get(acc.parentCode) : null;
+      const result = await client.query(
+        `INSERT INTO accounts (code, name, name_ka, type, parent_id, level, is_group, company_id)
+         VALUES ($1, $2, $3, $4::account_type, $5, $6, $7, $8)
+         RETURNING id`,
+        [acc.code, acc.name, acc.nameKa, acc.type, parentId, acc.level, acc.isGroup, companyId]
+      );
+      idMap.set(acc.code, result.rows[0].id);
+    }
+    console.log(`[seed] Seeded ${chartOfAccounts.length} accounts for company ${companyId}`);
+    return chartOfAccounts.length;
+  } finally {
+    await client.end();
   }
-
-  console.log(`Seeded ${chartOfAccounts.length} accounts for company ${companyId}`);
-  await client.end();
 }
 
-const companyId = process.argv[2];
-if (!companyId) {
-  console.error('Usage: npx tsx src/db/seed-accounts.ts <company-id>');
-  process.exit(1);
+// CLI entrypoint
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const companyId = process.argv[2];
+  if (!companyId) {
+    console.error('Usage: npx tsx src/db/seed-accounts.ts <company-id>');
+    process.exit(1);
+  }
+  seedAccountsForCompany(companyId).catch((e) => {
+    console.error('Seed error:', e.message);
+    process.exit(1);
+  });
 }
-
-seed(companyId).catch((e) => {
-  console.error('Seed error:', e.message);
-  process.exit(1);
-});

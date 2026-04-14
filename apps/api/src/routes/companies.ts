@@ -3,6 +3,7 @@ import { authMiddleware, type AuthSession } from '../auth/middleware';
 import { db } from '../db';
 import { companies } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import { seedAccountsForCompany } from '../db/seed-accounts';
 
 const companiesRoute = new Hono<{ Variables: { authSession: AuthSession } }>();
 
@@ -38,7 +39,26 @@ companiesRoute.post('/', async (c) => {
     })
     .returning();
 
+  // Auto-seed chart of accounts for new company
+  try {
+    await seedAccountsForCompany(company.id);
+  } catch (err) {
+    console.error('[companies] auto-seed failed:', err);
+  }
+
   return c.json({ company });
+});
+
+// Manual seed for existing companies
+companiesRoute.post('/:id/seed-accounts', async (c) => {
+  const id = c.req.param('id');
+  try {
+    const count = await seedAccountsForCompany(id);
+    return c.json({ success: true, seeded: count });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 500);
+  }
 });
 
 // Get single company

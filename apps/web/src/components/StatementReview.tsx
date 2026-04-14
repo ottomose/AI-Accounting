@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { parseStatement, createJournalEntry, getAccounts } from '../lib/api';
+import { parseStatement, createJournalEntry, getAccounts, seedCompanyAccounts } from '../lib/api';
 import type { ParsedStatement, ParsedTransaction, Account } from '../lib/api';
 
 interface Props {
@@ -150,6 +150,29 @@ export function StatementReview({ documentId, companyId, onClose }: Props) {
       </div>
 
       {error && <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
+
+      {accounts.length === 0 && (
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-sm text-yellow-800 mb-2">
+            ⚠️ ამ კომპანიას ანგარიშთა გეგმა (Chart of Accounts) არ აქვს. გატარება ვერ მოხდება.
+          </p>
+          <button
+            onClick={async () => {
+              try {
+                await seedCompanyAccounts(companyId);
+                const res = await getAccounts(companyId);
+                setAccounts(res.accounts);
+                setError('');
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Seed failed');
+              }
+            }}
+            className="px-3 py-1.5 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
+          >
+            ანგარიშთა გეგმის შექმნა (BASS)
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-2 mb-4">
         <button
