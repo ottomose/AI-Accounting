@@ -140,6 +140,116 @@ journalEntriesRoute.post('/:id/post', authMiddleware, async (c) => {
   }
 });
 
+// PATCH /journal-entries/:id — edit draft entry (replaces lines atomically)
+journalEntriesRoute.patch('/:id', authMiddleware, async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json<Partial<CreateJournalEntry>>();
+
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+
+  try {
+    await client.connect();
+    await client.query('BEGIN');
+
+    // Only drafts can be edited
+    const existing = await client.query(
+      `SELECT id, status, company_id FROM journal_entries WHERE id = $1`,
+      [id]
+    );
+    if (existing.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return c.json({ error: 'Entry not found' }, 404);
+    }
+    if (existing.rows[0].status !== 'draft') {
+      await client.query('ROLLBACK');
+      return c.json({ error: 'Only draft entries can be edited' }, 400);
+    }
+    const companyId = existing.rows[0].company_id;
+
+    // Validate lines if provided
+    if (body.lines) {
+      if (body.lines.length < 2) {
+        await client.query('ROLLBACK');
+        return c.json({ error: 'Entry must have at least 2 lines' }, 400);
+      }
+      const totalDebit = body.lines.reduce((s, l) => s + Number(l.debit), 0);
+      const totalCredit = body.lines.reduce((s, l) => s + Number(l.credit), 0);
+      if (Math.abs(totalDebit - totalCredit) > 0.001) {
+        await client.query('ROLLBACK');
+        return c.json({ error: `Debits (${totalDebit.toFixed(2)}) must equal Credits (${totalCredit.toFixed(2)})` }, 400);
+      }
+      for (const line of body.lines) {
+        if ((line.debit > 0 && line.credit > 0) || (line.debit === 0 && line.credit === 0)) {
+          await client.query('ROLLBACK');
+          return c.json({ error: 'Each line must have either debit or credit, not both' }, 400);
+        }
+      }
+    }
+
+    // Update header fields
+    const updates: string[] = [];
+    const values: (string | number)[] = [];
+    let idx = 1;
+    if (body.date !== undefined) { updates.push(`date = $${idx++}`); values.push(body.date); }
+    if (body.description !== undefined) { updates.push(`description = $${idx++}`); values.push(body.description); }
+    if (body.currency !== undefined) { updates.push(`currency = $${idx++}`); values.push(body.currency); }
+    if (updates.length > 0) {
+      updates.push(`updated_at = now()`);
+      values.push(id);
+      await client.query(
+        `UPDATE journal_entries SET ${updates.join(', ')} WHERE id = $${idx}`,
+        values
+      );
+    }
+
+    // Replace lines if provided
+    if (body.lines) {
+      await client.query(`DELETE FROM journal_lines WHERE journal_entry_id = $1`, [id]);
+      for (const line of body.lines) {
+        await client.query(
+          `INSERT INTO journal_lines (journal_entry_id, account_id, description, debit, credit, company_id)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [id, line.accountId, line.description || null, line.debit, line.credit, companyId]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return c.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    const msg = err instanceof Error ? err.message : 'Update failed';
+    return c.json({ error: msg }, 500);
+  } finally {
+    await client.end();
+  }
+});
+
+// DELETE /journal-entries/:id — delete draft
+journalEntriesRoute.delete('/:id', authMiddleware, async (c) => {
+  const id = c.req.param('id');
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  try {
+    await client.connect();
+    const check = await client.query(`SELECT status FROM journal_entries WHERE id = $1`, [id]);
+    if (check.rowCount === 0) return c.json({ error: 'Not found' }, 404);
+    if (check.rows[0].status !== 'draft') {
+      return c.json({ error: 'Only drafts can be deleted — use void for posted entries' }, 400);
+    }
+    await client.query(`DELETE FROM journal_lines WHERE journal_entry_id = $1`, [id]);
+    await client.query(`DELETE FROM journal_entries WHERE id = $1`, [id]);
+    return c.json({ success: true });
+  } finally {
+    await client.end();
+  }
+});
+
 // POST /journal-entries/:id/void — posted -> voided
 journalEntriesRoute.post('/:id/void', authMiddleware, async (c) => {
   const id = c.req.param('id');
@@ -182,16 +292,25 @@ journalEntriesRoute.get('/', authMiddleware, async (c) => {
   try {
     await client.connect();
     const result = await client.query(
-      `SELECT je.*,
+      `SELECT je.id, je.entry_number AS "entryNumber", je.date, je.description,
+              je.status, je.currency, je.exchange_rate AS "exchangeRate",
+              je.created_at AS "createdAt", je.posted_at AS "postedAt",
+              COALESCE(SUM(jl.debit), 0)::numeric(15,2) AS "totalDebit",
+              COALESCE(SUM(jl.credit), 0)::numeric(15,2) AS "totalCredit",
+              COUNT(jl.id)::int AS "lineCount",
               json_agg(json_build_object(
                 'id', jl.id,
                 'accountId', jl.account_id,
+                'accountCode', a.code,
+                'accountName', a.name,
+                'accountNameKa', a.name_ka,
                 'description', jl.description,
                 'debit', jl.debit,
                 'credit', jl.credit
-              ) ORDER BY jl.debit DESC) as lines
+              ) ORDER BY jl.debit DESC) AS lines
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+       LEFT JOIN accounts a ON a.id = jl.account_id
        WHERE je.company_id = $1
        GROUP BY je.id
        ORDER BY je.date DESC, je.entry_number DESC`,

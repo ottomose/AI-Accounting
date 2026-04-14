@@ -52,6 +52,18 @@ export const createJournalEntry = (data: CreateJournalEntryData) =>
 export const postJournalEntry = (id: string) =>
   request<{ entry: JournalEntry }>(`/api/journal-entries/${id}/post`, { method: 'POST' });
 
+export const updateJournalEntry = (id: string, data: Partial<CreateJournalEntryData>) =>
+  request<{ success: boolean }>(`/api/journal-entries/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+
+export const deleteJournalEntry = (id: string) =>
+  request<{ success: boolean }>(`/api/journal-entries/${id}`, { method: 'DELETE' });
+
+export const voidJournalEntry = (id: string) =>
+  request<{ entry: JournalEntry }>(`/api/journal-entries/${id}/void`, { method: 'POST' });
+
 // Trial Balance
 export const getTrialBalance = (companyId: string) =>
   request<TrialBalanceResponse>(`/api/trial-balance?companyId=${companyId}`);
@@ -140,6 +152,12 @@ export interface JournalEntry {
   description: string;
   status: string;
   currency: string;
+  exchangeRate?: string;
+  createdAt?: string;
+  postedAt?: string;
+  totalDebit?: string;
+  totalCredit?: string;
+  lineCount?: number;
   lines?: JournalLine[];
 }
 
@@ -148,8 +166,9 @@ export interface JournalLine {
   accountId: string;
   accountCode?: string;
   accountName?: string;
-  debit: string;
-  credit: string;
+  accountNameKa?: string;
+  debit: string | number;
+  credit: string | number;
   description?: string;
 }
 
