@@ -67,6 +67,28 @@ export const getUploadUrl = (fileName: string, contentType: string, companyId: s
     body: JSON.stringify({ fileName, contentType, companyId }),
   });
 
+// Proxy upload — sends file through API to R2 (avoids CORS issues)
+export async function uploadDocument(file: File, companyId: string): Promise<Document> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('companyId', companyId);
+
+  const res = await fetch(`${API_URL}/api/documents/upload`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Upload failed');
+  }
+
+  const data = await res.json();
+  return data.document;
+}
+
 export const processDocument = (id: string, documentType: string) =>
   request<{ documentId: string; extracted: unknown; rawText: string }>(
     `/api/documents/${id}/process`,

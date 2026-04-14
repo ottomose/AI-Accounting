@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getDocuments, getUploadUrl, processDocument } from '../lib/api';
+import { getDocuments, uploadDocument, processDocument } from '../lib/api';
 import type { Document } from '../lib/api';
 
 interface DocumentsViewProps {
@@ -7,6 +7,24 @@ interface DocumentsViewProps {
 }
 
 const FILE_ACCEPT = 'image/*,.pdf,.xlsx,.xls,.csv,.xml,.txt';
+
+const EXTENSION_MIME: Record<string, string> = {
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xls': 'application/vnd.ms-excel',
+  '.csv': 'text/csv',
+  '.pdf': 'application/pdf',
+  '.xml': 'application/xml',
+  '.txt': 'text/plain',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+};
+
+function guessMimeFromName(fileName: string): string {
+  const ext = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
+  return EXTENSION_MIME[ext] || 'application/octet-stream';
+}
 
 const FILE_ICONS: Record<string, string> = {
   'image/': '🖼️',
@@ -82,22 +100,12 @@ export function DocumentsView({ companyId }: DocumentsViewProps) {
 
     try {
       for (const file of Array.from(files)) {
-        const { uploadUrl, document: doc } = await getUploadUrl(
-          file.name,
-          file.type || 'application/octet-stream',
-          companyId
-        );
-
-        await fetch(uploadUrl, {
-          method: 'PUT',
-          body: file,
-          headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        });
-
+        const doc = await uploadDocument(file, companyId);
         setDocuments((prev) => [doc, ...prev]);
       }
-    } catch (err) {
-      setError('ატვირთვა ვერ მოხერხდა');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'ატვირთვა ვერ მოხერხდა';
+      setError(msg);
       console.error(err);
     } finally {
       setUploading(false);

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { authMiddleware, type AuthSession } from '../auth/middleware';
-import { getSignedUploadUrl, getSignedDownloadUrl, deleteFile } from '../storage/r2';
+import { uploadFile, getSignedUploadUrl, getSignedDownloadUrl, deleteFile } from '../storage/r2';
 import { db } from '../db';
 import { documents } from '../db/schema';
 import { eq } from 'drizzle-orm';
@@ -29,6 +29,39 @@ documentsRoute.post('/upload-url', authMiddleware, async (c) => {
     .returning();
 
   return c.json({ uploadUrl, document: doc });
+});
+
+// Proxy upload — browser uploads file to API, API uploads to R2
+documentsRoute.post('/upload', authMiddleware, async (c) => {
+  const formData = await c.req.formData();
+  const file = formData.get('file') as File;
+  const companyId = formData.get('companyId') as string;
+
+  if (!file || !companyId) {
+    return c.json({ error: 'file and companyId are required' }, 400);
+  }
+
+  const { user } = c.get('authSession');
+  const fileName = file.name;
+  const contentType = file.type || 'application/octet-stream';
+  const key = `${companyId}/${randomUUID()}-${fileName}`;
+
+  // Upload to R2 via server
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await uploadFile(key, buffer, contentType);
+
+  const [doc] = await db
+    .insert(documents)
+    .values({
+      fileName,
+      fileUrl: key,
+      mimeType: contentType,
+      companyId,
+      uploadedById: user.id,
+    })
+    .returning();
+
+  return c.json({ document: doc });
 });
 
 // Get presigned download URL
