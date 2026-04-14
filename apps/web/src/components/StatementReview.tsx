@@ -37,7 +37,8 @@ export function StatementReview({ documentId, companyId, onClose }: Props) {
       setRows(
         st.transactions.map((tx) => ({
           ...tx,
-          _selected: !tx.suggestion?.needsReview,
+          // Select any row that has both debit and credit suggested
+          _selected: !!(tx.suggestion?.debitAccountCode && tx.suggestion?.creditAccountCode),
           _debit: tx.suggestion?.debitAccountCode ?? '',
           _credit: tx.suggestion?.creditAccountCode ?? '',
         }))
@@ -56,8 +57,13 @@ export function StatementReview({ documentId, companyId, onClose }: Props) {
   async function postSelected() {
     if (!statement) return;
     const codeToAccount = new Map(accounts.map((a) => [a.code, a]));
+    console.log('[postSelected] total accounts:', accounts.length, 'first few codes:', accounts.slice(0, 5).map((a) => a.code));
     setPosting(true);
     setError('');
+
+    let posted = 0;
+    let failed = 0;
+    const errors: string[] = [];
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -65,7 +71,11 @@ export function StatementReview({ documentId, companyId, onClose }: Props) {
       const debitAcc = codeToAccount.get(row._debit);
       const creditAcc = codeToAccount.get(row._credit);
       if (!debitAcc || !creditAcc) {
-        updateRow(i, { _error: 'ანგარიშის კოდი არასწორია' });
+        const msg = `ანგარიშის კოდი ვერ მოიძებნა: debit="${row._debit}" credit="${row._credit}"`;
+        console.error('[postSelected]', msg, 'row:', row);
+        updateRow(i, { _error: msg });
+        errors.push(`#${i + 1}: ${msg}`);
+        failed++;
         continue;
       }
 
@@ -81,11 +91,20 @@ export function StatementReview({ documentId, companyId, onClose }: Props) {
           ],
         });
         updateRow(i, { _posted: true, _error: undefined });
+        posted++;
       } catch (err) {
-        updateRow(i, { _error: err instanceof Error ? err.message : 'Post failed' });
+        const msg = err instanceof Error ? err.message : 'Post failed';
+        console.error('[postSelected] entry failed:', msg, row);
+        updateRow(i, { _error: msg });
+        errors.push(`#${i + 1}: ${msg}`);
+        failed++;
       }
     }
+
     setPosting(false);
+    if (failed > 0) {
+      setError(`გატარდა ${posted}, ვერ გატარდა ${failed}. ${errors.slice(0, 3).join(' | ')}`);
+    }
   }
 
   if (!statement) {
