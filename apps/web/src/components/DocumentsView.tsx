@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getDocuments, uploadDocument, processDocument } from '../lib/api';
+import { getDocuments, uploadDocument, processDocument, getDocumentDownloadUrl, deleteDocument } from '../lib/api';
 import type { Document } from '../lib/api';
 
 interface DocumentsViewProps {
@@ -68,6 +68,8 @@ export function DocumentsView({ companyId }: DocumentsViewProps) {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<{
     documentId: string;
     extracted: unknown;
@@ -128,6 +130,36 @@ export function DocumentsView({ companyId }: DocumentsViewProps) {
     }
   }
 
+  async function handleView(docId: string) {
+    setViewing(docId);
+    setError('');
+    try {
+      const { downloadUrl } = await getDocumentDownloadUrl(docId);
+      window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setError('ფაილის გახსნა ვერ მოხერხდა');
+      console.error(err);
+    } finally {
+      setViewing(null);
+    }
+  }
+
+  async function handleDelete(docId: string) {
+    if (!confirm('ნამდვილად გსურთ ამ დოკუმენტის წაშლა?')) return;
+    setDeleting(docId);
+    setError('');
+    try {
+      await deleteDocument(docId);
+      setDocuments((prev) => prev.filter((d) => d.id !== docId));
+      if (ocrResult?.documentId === docId) setOcrResult(null);
+    } catch (err) {
+      setError('წაშლა ვერ მოხერხდა');
+      console.error(err);
+    } finally {
+      setDeleting(null);
+    }
+  }
+
   if (loading) return <div className="text-gray-500 py-8 text-center">იტვირთება...</div>;
 
   return (
@@ -183,8 +215,26 @@ export function DocumentsView({ companyId }: DocumentsViewProps) {
                           {new Date(doc.createdAt).toLocaleDateString('ka-GE')}
                         </div>
                       </div>
-                      <div className="text-xs text-gray-400 mb-3">
-                        {getFileTypeLabel(doc.mimeType)}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-xs text-gray-400">
+                          {getFileTypeLabel(doc.mimeType)}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleView(doc.id)}
+                            disabled={viewing === doc.id}
+                            className="text-xs px-2 py-1 rounded-md bg-gray-50 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                          >
+                            {viewing === doc.id ? '...' : 'ნახვა'}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(doc.id)}
+                            disabled={deleting === doc.id}
+                            className="text-xs px-2 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                          >
+                            {deleting === doc.id ? '...' : 'წაშლა'}
+                          </button>
+                        </div>
                       </div>
                       <div className="flex gap-2 flex-wrap">
                         <span className="text-xs text-gray-400">დამუშავება:</span>

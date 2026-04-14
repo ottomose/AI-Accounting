@@ -89,6 +89,12 @@ export async function uploadDocument(file: File, companyId: string): Promise<Doc
   return data.document;
 }
 
+export const getDocumentDownloadUrl = (id: string) =>
+  request<{ downloadUrl: string }>(`/api/documents/${id}/download`);
+
+export const deleteDocument = (id: string) =>
+  request<{ success: boolean }>(`/api/documents/${id}`, { method: 'DELETE' });
+
 export const processDocument = (id: string, documentType: string) =>
   request<{ documentId: string; extracted: unknown; rawText: string }>(
     `/api/documents/${id}/process`,

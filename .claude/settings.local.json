@@ -31,7 +31,9 @@
       "Bash(npx vitest:*)",
       "Bash(gh run:*)",
       "Bash(gh secret:*)",
-      "Bash(gh workflow:*)"
+      "Bash(gh workflow:*)",
+      "WebFetch(domain:ai-accountingapi-production.up.railway.app)",
+      "WebFetch(domain:ai-accountingweb-production.up.railway.app)"
     ]
   }
 }

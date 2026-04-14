@@ -118,32 +118,44 @@ documentsRoute.get('/', authMiddleware, async (c) => {
 // Process document with OCR
 documentsRoute.post('/:id/process', authMiddleware, async (c) => {
   const id = c.req.param('id');
-  const { documentType } = await c.req.json();
+  try {
+    const { documentType } = await c.req.json();
 
-  const [doc] = await db
-    .select()
-    .from(documents)
-    .where(eq(documents.id, id));
+    const [doc] = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.id, id));
 
-  if (!doc) return c.json({ error: 'Not found' }, 404);
+    if (!doc) return c.json({ error: 'Not found' }, 404);
 
-  // Download file from R2 as base64
-  const downloadUrl = await getSignedDownloadUrl(doc.fileUrl);
-  const response = await fetch(downloadUrl);
-  const buffer = await response.arrayBuffer();
-  const base64 = Buffer.from(buffer).toString('base64');
+    console.log(`[Process] ${doc.fileName} (${doc.mimeType}) as ${documentType}`);
 
-  const result = await processDocumentOCR(
-    base64,
-    doc.mimeType,
-    documentType || 'receipt'
-  );
+    // Download file from R2 as base64
+    const downloadUrl = await getSignedDownloadUrl(doc.fileUrl);
+    const response = await fetch(downloadUrl);
+    if (!response.ok) {
+      throw new Error(`R2 download failed: ${response.status} ${response.statusText}`);
+    }
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
 
-  return c.json({
-    documentId: id,
-    documentType: documentType || 'receipt',
-    ...result,
-  });
+    const result = await processDocumentOCR(
+      base64,
+      doc.mimeType,
+      documentType || 'receipt'
+    );
+
+    console.log(`[Process] Success: ${id} — extracted=${!!result.extracted}`);
+    return c.json({
+      documentId: id,
+      documentType: documentType || 'receipt',
+      ...result,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Process Error] ${id}:`, err);
+    return c.json({ error: `Processing failed: ${msg}` }, 500);
+  }
 });
 
 export default documentsRoute;
