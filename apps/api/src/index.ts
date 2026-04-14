@@ -24,6 +24,8 @@ app.use(
   cors({
     origin: corsOrigin,
     credentials: true,
+    allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   })
 );
 
@@ -92,6 +94,6 @@ app.get('/api/admin/users', authMiddleware, requireRole('admin'), (c) => {
 const port = Number(process.env.PORT) || 3000;
 console.log(`Server running on http://localhost:${port}`);
 
-serve({ fetch: app.fetch, port });
+serve({ fetch: app.fetch, port, overrideGlobalObjects: false });
 
 export default app;

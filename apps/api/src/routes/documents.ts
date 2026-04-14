@@ -33,35 +33,43 @@ documentsRoute.post('/upload-url', authMiddleware, async (c) => {
 
 // Proxy upload — browser uploads file to API, API uploads to R2
 documentsRoute.post('/upload', authMiddleware, async (c) => {
-  const formData = await c.req.formData();
-  const file = formData.get('file') as File;
-  const companyId = formData.get('companyId') as string;
+  try {
+    const formData = await c.req.formData();
+    const file = formData.get('file') as File;
+    const companyId = formData.get('companyId') as string;
 
-  if (!file || !companyId) {
-    return c.json({ error: 'file and companyId are required' }, 400);
+    if (!file || !companyId) {
+      return c.json({ error: 'file and companyId are required' }, 400);
+    }
+
+    const { user } = c.get('authSession');
+    const fileName = file.name;
+    const contentType = file.type || 'application/octet-stream';
+    const key = `${companyId}/${randomUUID()}-${fileName}`;
+
+    console.log(`[Upload] ${fileName} (${contentType}, ${file.size} bytes)`);
+
+    // Upload to R2 via server
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await uploadFile(key, buffer, contentType);
+
+    const [doc] = await db
+      .insert(documents)
+      .values({
+        fileName,
+        fileUrl: key,
+        mimeType: contentType,
+        companyId,
+        uploadedById: user.id,
+      })
+      .returning();
+
+    console.log(`[Upload] Success: ${doc.id}`);
+    return c.json({ document: doc });
+  } catch (err) {
+    console.error('[Upload Error]', err);
+    return c.json({ error: 'Upload failed on server' }, 500);
   }
-
-  const { user } = c.get('authSession');
-  const fileName = file.name;
-  const contentType = file.type || 'application/octet-stream';
-  const key = `${companyId}/${randomUUID()}-${fileName}`;
-
-  // Upload to R2 via server
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await uploadFile(key, buffer, contentType);
-
-  const [doc] = await db
-    .insert(documents)
-    .values({
-      fileName,
-      fileUrl: key,
-      mimeType: contentType,
-      companyId,
-      uploadedById: user.id,
-    })
-    .returning();
-
-  return c.json({ document: doc });
 });
 
 // Get presigned download URL
