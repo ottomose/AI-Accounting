@@ -196,14 +196,18 @@ documentsRoute.post('/:id/parse-statement', authMiddleware, async (c) => {
 
     if (aiPending.length > 0) {
       console.log(`[ParseStatement] AI categorizing ${aiPending.length} transactions`);
-      const aiResults = await aiCategorizeBatch(
-        aiPending.map((p) => p.tx),
-        aiPending.map((p) => p.index),
-        companyAccounts
-      );
-      aiResults.forEach((sugg, origIdx) => {
-        suggestions[origIdx] = sugg;
-      });
+      try {
+        const aiResults = await aiCategorizeBatch(
+          aiPending.map((p) => p.tx),
+          aiPending.map((p) => p.index),
+          companyAccounts
+        );
+        aiResults.forEach((sugg, origIdx) => {
+          suggestions[origIdx] = sugg;
+        });
+      } catch (aiErr) {
+        console.error('[ParseStatement] AI categorization failed, continuing:', aiErr);
+      }
     }
 
     return c.json({
