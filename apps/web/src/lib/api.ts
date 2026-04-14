@@ -95,6 +95,12 @@ export const getDocumentDownloadUrl = (id: string) =>
 export const deleteDocument = (id: string) =>
   request<{ success: boolean }>(`/api/documents/${id}`, { method: 'DELETE' });
 
+export const parseStatement = (id: string) =>
+  request<{ documentId: string; statement: ParsedStatement }>(
+    `/api/documents/${id}/parse-statement`,
+    { method: 'POST' }
+  );
+
 export const processDocument = (id: string, documentType: string) =>
   request<{ documentId: string; extracted: unknown; rawText: string }>(
     `/api/documents/${id}/process`,
@@ -166,6 +172,39 @@ export interface Document {
   mimeType: string;
   companyId: string;
   createdAt: string;
+}
+
+export interface ParsedTransaction {
+  date: string;
+  description: string;
+  additionalInfo?: string;
+  amount: number;
+  direction: 'in' | 'out';
+  balance?: number;
+  currency?: string;
+  bankTransactionType?: string;
+  partnerName?: string;
+  partnerTaxCode?: string;
+  opCode?: string;
+  transactionId?: string;
+  suggestion: {
+    debitAccountCode: string;
+    creditAccountCode: string;
+    confidence: 'high' | 'medium' | 'low';
+    reason: string;
+    needsReview: boolean;
+  } | null;
+}
+
+export interface ParsedStatement {
+  bank: string;
+  accountNumber?: string;
+  currency: string;
+  periodStart?: string;
+  periodEnd?: string;
+  openingBalance?: number;
+  closingBalance?: number;
+  transactions: ParsedTransaction[];
 }
 
 export interface TrialBalanceResponse {

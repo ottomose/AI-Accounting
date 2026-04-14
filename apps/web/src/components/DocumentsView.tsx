@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getDocuments, uploadDocument, processDocument, getDocumentDownloadUrl, deleteDocument } from '../lib/api';
 import type { Document } from '../lib/api';
+import { StatementReview } from './StatementReview';
 
 interface DocumentsViewProps {
   companyId: string;
@@ -70,6 +71,7 @@ export function DocumentsView({ companyId }: DocumentsViewProps) {
   const [processing, setProcessing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
+  const [reviewingDocId, setReviewingDocId] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<{
     documentId: string;
     extracted: unknown;
@@ -236,6 +238,14 @@ export function DocumentsView({ companyId }: DocumentsViewProps) {
                           </button>
                         </div>
                       </div>
+                      {(doc.mimeType.includes('spreadsheet') || doc.mimeType.includes('excel')) && (
+                        <button
+                          onClick={() => setReviewingDocId(doc.id)}
+                          className="mb-2 text-xs px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 w-full"
+                        >
+                          📊 ამონაწერის ანალიზი (TBC)
+                        </button>
+                      )}
                       <div className="flex gap-2 flex-wrap">
                         <span className="text-xs text-gray-400">დამუშავება:</span>
                         {['receipt', 'invoice', 'bank_statement', 'general'].map((type) => {
@@ -273,7 +283,13 @@ export function DocumentsView({ companyId }: DocumentsViewProps) {
           </div>
 
           <div className="lg:sticky lg:top-4 lg:self-start">
-            {ocrResult ? (
+            {reviewingDocId ? (
+              <StatementReview
+                documentId={reviewingDocId}
+                companyId={companyId}
+                onClose={() => setReviewingDocId(null)}
+              />
+            ) : ocrResult ? (
               <div className="bg-white rounded-xl shadow-sm border p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-medium text-gray-900">დამუშავების შედეგი</h3>

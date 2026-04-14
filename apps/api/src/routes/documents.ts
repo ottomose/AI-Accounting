@@ -3,9 +3,13 @@ import { authMiddleware, type AuthSession } from '../auth/middleware';
 import { uploadFile, getSignedUploadUrl, getSignedDownloadUrl, deleteFile } from '../storage/r2';
 import { db } from '../db';
 import { documents } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { processDocumentOCR } from '../ai/service';
+import { parseStatement } from '../parsers/bank';
+import { ruleCategorize, type Suggestion } from '../parsers/bank/categorize';
+import { aiCategorizeBatch } from '../parsers/bank/ai-categorize';
+import { accounts } from '../db/schema';
 
 const documentsRoute = new Hono<{ Variables: { authSession: AuthSession } }>();
 
@@ -155,6 +159,67 @@ documentsRoute.post('/:id/process', authMiddleware, async (c) => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Process Error] ${id}:`, err);
     return c.json({ error: `Processing failed: ${msg}` }, 500);
+  }
+});
+
+// Parse bank statement (XLSX) + categorize transactions
+documentsRoute.post('/:id/parse-statement', authMiddleware, async (c) => {
+  const id = c.req.param('id');
+  try {
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id));
+    if (!doc) return c.json({ error: 'Not found' }, 404);
+
+    console.log(`[ParseStatement] ${doc.fileName} (${doc.mimeType})`);
+
+    const downloadUrl = await getSignedDownloadUrl(doc.fileUrl);
+    const response = await fetch(downloadUrl);
+    if (!response.ok) throw new Error(`R2 download failed: ${response.status}`);
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    const statement = parseStatement(buffer, doc.mimeType);
+    console.log(`[ParseStatement] bank=${statement.bank} tx=${statement.transactions.length}`);
+
+    // Load chart of accounts for this company (for AI context)
+    const companyAccounts = await db
+      .select({ code: accounts.code, nameKa: accounts.nameKa, type: accounts.type })
+      .from(accounts)
+      .where(and(eq(accounts.companyId, doc.companyId), eq(accounts.isGroup, false)));
+
+    // Step 1: rule-based categorization
+    const suggestions: (Suggestion | null)[] = statement.transactions.map((tx) => ruleCategorize(tx));
+
+    // Step 2: AI fallback for unmatched
+    const aiPending: { tx: typeof statement.transactions[0]; index: number }[] = [];
+    suggestions.forEach((s, i) => {
+      if (!s) aiPending.push({ tx: statement.transactions[i], index: i });
+    });
+
+    if (aiPending.length > 0) {
+      console.log(`[ParseStatement] AI categorizing ${aiPending.length} transactions`);
+      const aiResults = await aiCategorizeBatch(
+        aiPending.map((p) => p.tx),
+        aiPending.map((p) => p.index),
+        companyAccounts
+      );
+      aiResults.forEach((sugg, origIdx) => {
+        suggestions[origIdx] = sugg;
+      });
+    }
+
+    return c.json({
+      documentId: id,
+      statement: {
+        ...statement,
+        transactions: statement.transactions.map((tx, i) => ({
+          ...tx,
+          suggestion: suggestions[i] ?? null,
+        })),
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[ParseStatement Error] ${id}:`, err);
+    return c.json({ error: `Parse failed: ${msg}` }, 500);
   }
 });
 
