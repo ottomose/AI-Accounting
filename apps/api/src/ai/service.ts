@@ -445,42 +445,107 @@ export async function chat(
   return { reply: finalReply, toolResults };
 }
 
-// ==================== OCR Function ====================
+// ==================== Document Processing ====================
+
+import * as XLSX from 'xlsx';
+
+const DOC_PROMPTS: Record<string, string> = {
+  receipt: `ამოიცანი ამ ჩეკიდან/ქვითრიდან: თარიღი, თანხა, ვალუტა, გამყიდველი, საიდენტიფიკაციო ნომერი, დანიშნულება, დღგ, გადახდის მეთოდი. პასუხი JSON-ით.`,
+  invoice: `ამოიცანი ამ ინვოისიდან: ნომერი, თარიღი, გამყიდველი, მყიდველი, სტრიქონები, ქვეჯამი, დღგ, ჯამი, ვალუტა. პასუხი JSON-ით.`,
+  bank_statement: `ამოიცანი ამ საბანკო ამონაწერიდან: ანგარიშის ნომერი, ბანკი, ტრანზაქციები (თარიღი, აღწერა, დებეტი/კრედიტი, ნაშთი). პასუხი JSON-ით.`,
+  general: `ამოიცანი ამ დოკუმენტიდან ყველა ფინანსური ინფორმაცია: თარიღები, თანხები, კონტრაგენტები, ტრანზაქციები. პასუხი JSON-ით.`,
+};
+
+function isImageMime(mime: string): boolean {
+  return mime.startsWith('image/');
+}
+
+function isPdfMime(mime: string): boolean {
+  return mime === 'application/pdf';
+}
+
+function isXlsxMime(mime: string): boolean {
+  return mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    || mime === 'application/vnd.ms-excel';
+}
+
+function isCsvMime(mime: string): boolean {
+  return mime === 'text/csv' || mime === 'application/csv';
+}
+
+function isTextMime(mime: string): boolean {
+  return mime.startsWith('text/') || mime === 'application/xml' || mime === 'text/xml';
+}
+
+function xlsxToText(buffer: Buffer): string {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheets: string[] = [];
+  for (const name of workbook.SheetNames) {
+    const sheet = workbook.Sheets[name];
+    const csv = XLSX.utils.sheet_to_csv(sheet);
+    sheets.push(`=== Sheet: ${name} ===\n${csv}`);
+  }
+  return sheets.join('\n\n');
+}
 
 export async function processDocumentOCR(
-  imageBase64: string,
+  fileBase64: string,
   mediaType: string,
-  documentType: 'receipt' | 'invoice' | 'bank_statement'
+  documentType: string
 ): Promise<{ extracted: unknown; rawText: string }> {
-  const prompts: Record<string, string> = {
-    receipt: `ამოიცანი ამ ჩეკიდან/ქვითრიდან: თარიღი, თანხა, ვალუტა, გამყიდველი, საიდენტიფიკაციო ნომერი, დანიშნულება, დღგ, გადახდის მეთოდი. პასუხი JSON-ით.`,
-    invoice: `ამოიცანი ამ ინვოისიდან: ნომერი, თარიღი, გამყიდველი, მყიდველი, სტრიქონები, ქვეჯამი, დღგ, ჯამი, ვალუტა. პასუხი JSON-ით.`,
-    bank_statement: `ამოიცანი ამ საბანკო ამონაწერიდან: ანგარიშის ნომერი, ბანკი, ტრანზაქციები (თარიღი, აღწერა, დებეტი/კრედიტი, ნაშთი). პასუხი JSON-ით.`,
-  };
+  const buffer = Buffer.from(fileBase64, 'base64');
+  const prompt = DOC_PROMPTS[documentType] || DOC_PROMPTS.general;
+
+  let messages: MessageParam[];
+
+  if (isImageMime(mediaType)) {
+    // Image → vision API
+    messages = [{
+      role: 'user',
+      content: [
+        {
+          type: 'image',
+          source: { type: 'base64', media_type: mediaType as ImageMediaType, data: fileBase64 },
+        },
+        { type: 'text', text: prompt },
+      ],
+    }];
+  } else if (isPdfMime(mediaType)) {
+    // PDF → Claude's native PDF support
+    messages = [{
+      role: 'user',
+      content: [
+        {
+          type: 'document',
+          source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 },
+        } as any,
+        { type: 'text', text: prompt },
+      ],
+    }];
+  } else if (isXlsxMime(mediaType)) {
+    // XLSX → convert to CSV text, send as text
+    const text = xlsxToText(buffer);
+    messages = [{
+      role: 'user',
+      content: `ეს არის Excel/XLSX ფაილის შიგთავსი CSV ფორმატში:\n\n${text}\n\n${prompt}`,
+    }];
+  } else if (isCsvMime(mediaType) || isTextMime(mediaType)) {
+    // CSV, XML, TXT → read as text
+    const text = buffer.toString('utf-8');
+    const fileLabel = isCsvMime(mediaType) ? 'CSV' : mediaType.includes('xml') ? 'XML' : 'ტექსტური';
+    messages = [{
+      role: 'user',
+      content: `ეს არის ${fileLabel} ფაილის შიგთავსი:\n\n${text}\n\n${prompt}`,
+    }];
+  } else {
+    return { extracted: null, rawText: `Unsupported file type: ${mediaType}` };
+  }
 
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 4096,
     temperature: 0,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: mediaType as ImageMediaType,
-              data: imageBase64,
-            },
-          },
-          {
-            type: 'text',
-            text: prompts[documentType],
-          },
-        ],
-      },
-    ],
+    messages,
   });
 
   let rawText = '';
@@ -497,7 +562,11 @@ export async function processDocumentOCR(
     try {
       extracted = JSON.parse(jsonMatch[0]);
     } catch {
-      extracted = null;
+      // Try array match for bank statements
+      const arrayMatch = rawText.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        try { extracted = JSON.parse(arrayMatch[0]); } catch { /* ignore */ }
+      }
     }
   }
 
