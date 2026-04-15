@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getDocuments, uploadDocument, processDocument, getDocumentDownloadUrl, deleteDocument } from '../lib/api';
 import type { Document } from '../lib/api';
 import { StatementReview } from './StatementReview';
+import { InvoiceReview } from './InvoiceReview';
 
 interface DocumentsViewProps {
   companyId: string;
@@ -72,6 +73,7 @@ export function DocumentsView({ companyId }: DocumentsViewProps) {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [reviewingDocId, setReviewingDocId] = useState<string | null>(null);
+  const [reviewMode, setReviewMode] = useState<'statement' | 'invoices'>('statement');
   const [ocrResult, setOcrResult] = useState<{
     documentId: string;
     extracted: unknown;
@@ -239,12 +241,20 @@ export function DocumentsView({ companyId }: DocumentsViewProps) {
                         </div>
                       </div>
                       {(doc.mimeType.includes('spreadsheet') || doc.mimeType.includes('excel')) && (
-                        <button
-                          onClick={() => setReviewingDocId(doc.id)}
-                          className="mb-2 text-xs px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 w-full"
-                        >
-                          📊 ამონაწერის ანალიზი (TBC)
-                        </button>
+                        <div className="flex gap-2 mb-2">
+                          <button
+                            onClick={() => { setReviewMode('statement'); setReviewingDocId(doc.id); }}
+                            className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                          >
+                            📊 ამონაწერი (TBC)
+                          </button>
+                          <button
+                            onClick={() => { setReviewMode('invoices'); setReviewingDocId(doc.id); }}
+                            className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100"
+                          >
+                            🧾 ფაქტურები (RS.ge)
+                          </button>
+                        </div>
                       )}
                       <div className="flex gap-2 flex-wrap">
                         <span className="text-xs text-gray-400">დამუშავება:</span>
@@ -284,11 +294,19 @@ export function DocumentsView({ companyId }: DocumentsViewProps) {
 
           <div className="lg:sticky lg:top-4 lg:self-start">
             {reviewingDocId ? (
-              <StatementReview
-                documentId={reviewingDocId}
-                companyId={companyId}
-                onClose={() => setReviewingDocId(null)}
-              />
+              reviewMode === 'invoices' ? (
+                <InvoiceReview
+                  documentId={reviewingDocId}
+                  companyId={companyId}
+                  onClose={() => setReviewingDocId(null)}
+                />
+              ) : (
+                <StatementReview
+                  documentId={reviewingDocId}
+                  companyId={companyId}
+                  onClose={() => setReviewingDocId(null)}
+                />
+              )
             ) : ocrResult ? (
               <div className="bg-white rounded-xl shadow-sm border p-4">
                 <div className="flex items-center justify-between mb-3">

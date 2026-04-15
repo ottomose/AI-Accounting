@@ -9,7 +9,9 @@ import { processDocumentOCR } from '../ai/service';
 import { parseStatement } from '../parsers/bank';
 import { ruleCategorize, type Suggestion } from '../parsers/bank/categorize';
 import { aiCategorizeBatch } from '../parsers/bank/ai-categorize';
-import { accounts } from '../db/schema';
+import { accounts, companies } from '../db/schema';
+import { parseRsGeInvoices } from '../parsers/invoices/rs-ge';
+import { categorizeInvoice } from '../parsers/invoices/categorize';
 
 const documentsRoute = new Hono<{ Variables: { authSession: AuthSession } }>();
 
@@ -245,6 +247,65 @@ documentsRoute.post('/:id/parse-statement', authMiddleware, async (c) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[ParseStatement Error] ${id}:`, err);
+    return c.json({ error: `Parse failed: ${msg}` }, 500);
+  }
+});
+
+// Parse RS.ge invoice registry (XLSX) — returns invoices with suggestions + alreadyPosted flag
+documentsRoute.post('/:id/parse-invoices', authMiddleware, async (c) => {
+  const id = c.req.param('id');
+  try {
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id));
+    if (!doc) return c.json({ error: 'Not found' }, 404);
+
+    const [company] = await db.select().from(companies).where(eq(companies.id, doc.companyId));
+    if (!company) return c.json({ error: 'Company not found' }, 404);
+
+    console.log(`[ParseInvoices] ${doc.fileName} (company.taxId=${company.taxId})`);
+
+    const downloadUrl = await getSignedDownloadUrl(doc.fileUrl);
+    const response = await fetch(downloadUrl);
+    if (!response.ok) throw new Error(`R2 download failed: ${response.status}`);
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    const registry = parseRsGeInvoices(buffer, company.taxId);
+    console.log(`[ParseInvoices] parsed ${registry.invoices.length} invoices`);
+
+    const suggestions = registry.invoices.map((inv) => categorizeInvoice(inv));
+
+    // Check which invoices are already posted
+    const ids = registry.invoices.map((i) => i.invoiceId).filter(Boolean);
+    let postedRefs = new Set<string>();
+    if (ids.length > 0) {
+      const { Client } = await import('pg');
+      const pgClient = new Client({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+      });
+      try {
+        await pgClient.connect();
+        const res = await pgClient.query(
+          `SELECT source_ref FROM journal_entries WHERE company_id = $1 AND source_ref = ANY($2::text[])`,
+          [doc.companyId, ids]
+        );
+        postedRefs = new Set(res.rows.map((r) => r.source_ref));
+      } finally {
+        await pgClient.end();
+      }
+    }
+
+    return c.json({
+      documentId: id,
+      companyTaxId: company.taxId,
+      invoices: registry.invoices.map((inv, i) => ({
+        ...inv,
+        suggestion: suggestions[i],
+        alreadyPosted: postedRefs.has(inv.invoiceId),
+      })),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[ParseInvoices Error] ${id}:`, err);
     return c.json({ error: `Parse failed: ${msg}` }, 500);
   }
 });

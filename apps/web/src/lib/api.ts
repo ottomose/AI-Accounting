@@ -119,6 +119,12 @@ export const parseStatement = (id: string) =>
     { method: 'POST' }
   );
 
+export const parseInvoices = (id: string) =>
+  request<{ documentId: string; companyTaxId: string; invoices: ParsedInvoice[] }>(
+    `/api/documents/${id}/parse-invoices`,
+    { method: 'POST' }
+  );
+
 export const processDocument = (id: string, documentType: string) =>
   request<{ documentId: string; extracted: unknown; rawText: string }>(
     `/api/documents/${id}/process`,
@@ -232,6 +238,33 @@ export interface ParsedStatement {
   openingBalance?: number;
   closingBalance?: number;
   transactions: ParsedTransaction[];
+}
+
+export interface ParsedInvoice {
+  invoiceId: string;
+  series?: string;
+  issueDate?: string;
+  operationDate?: string;
+  description: string;
+  unit?: string;
+  quantity?: number;
+  totalAmount: number;
+  taxationType?: string;
+  vat: number;
+  excise?: number;
+  buyerTaxCode?: string;
+  buyerName?: string;
+  sellerTaxCode?: string;
+  sellerName?: string;
+  note?: string;
+  direction: 'sale' | 'purchase' | 'unknown';
+  alreadyPosted?: boolean;
+  suggestion: {
+    lines: { accountCode: string; debit: number; credit: number; description?: string }[];
+    confidence: 'high' | 'medium' | 'low';
+    reason: string;
+    needsReview: boolean;
+  } | null;
 }
 
 export interface TrialBalanceResponse {
